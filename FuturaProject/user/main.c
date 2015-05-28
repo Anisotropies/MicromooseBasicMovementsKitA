@@ -67,13 +67,16 @@ int maxSpeed = speed_to_counts(2000*2);
 //Gyro Variables
 int gyroFeedbackRatio = 5700;
 //Sensor Variables
-bool b_useIR = false;
-bool b_useGyro = false;
+bool b_useIR = true;
+bool b_useGyro = true;
 bool b_useSpeedProfile = true;
 
-//Function Declarations
+/* * * * * * * * * * * * * 
+ * Function Declarations *
+ * * * * * * * * * * * * */
 void speedProfile(void);
 void getEncoderStatus(void);
+void calculateMotorPwm(void);
 
 /* * * * * * * * * *
  * Systick Handler *
@@ -130,6 +133,47 @@ void getEncoderStatus()
 	distanceLeft -= encoderChange;
 }
 
+/* * * * * * * * * * * * * * * *
+ *      Calculate Motor PWM    *
+ *   Take speed variables and  *
+ *  calculate motor pwm values *
+ * * * * * * * * * * * * * * * */
+ void calculateMotorPwm()
+ {
+ 	int gyroFeedback;
+ 	int rotationalFeeback;
+ 	int sensorFeedback;
+ 	int leftBaseSpeed;
+ 	int rightBaseSpeed;
+
+ 	encoderFeedbackX = rightEncoderChange + leftEncoderChange;
+ 	encoderFeedbackW = rightEncoderChange - leftEncoderChange;
+
+ 	gyroFeedback = aSpeed/gyroFeedbackRatio;
+ 	sensorFeedback = sensorError/a_scale;
+
+ 	if (onlyUseGyroFeedback)
+ 		rotationalFeedback = gyroFeedback;
+ 	else if (onlyUseEncoderFeedback)
+ 		rotationalFeedback = encoderFeedbackW;
+ 	else
+ 		rotationalFeedback = encoderFeedbackW + gyroFeedback;
+
+ 	posErrorX += curSpeedX - encoderFeedbackX;
+ 	posErrorW += curSpeedW - rotationalFeedback;
+
+ 	posPwmX = (kpX * posErrorX) + (kdX * (posErrorX - oldPosErrorX));
+ 	posPwmW = (kpW * posErrorW) + (kdW * (posErrorW - oldPosErrorW));
+
+ 	oldPosErrorX = posErrorX;
+ 	oldPosErrorW = posErrorW;
+
+ 	leftBaseSpeed = posPwmX - posPwmW;
+ 	rightBaseSpeed = posPwmX + posPwmW;
+
+ 	setLeftPwm(leftBaseSpeed);
+ 	setRightPwm(rightBaseSpeed);
+ }
 /********************
 * Basic Movements		*
 *										*
