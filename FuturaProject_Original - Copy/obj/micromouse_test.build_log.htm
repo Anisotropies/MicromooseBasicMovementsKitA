@@ -27,15 +27,15 @@ Project File Date:  05/28/2015
 <h2>Output:</h2>
 Build target 'Target 1'
 compiling main.c...
-..\user\main.c(183): warning:  #1035-D: single-precision operand implicitly converted to double-precision
-                curSpeedX += 0.5;//accTrans;
-..\user\main.c(189): warning:  #1035-D: single-precision operand implicitly converted to double-precision
-                curSpeedX -= 0.5;//decTrans;
-..\user\main.c(216): warning:  #550-D: variable "sensorFeedback" was set but never used
+..\user\main.c(234): warning:  #550-D: variable "sensorFeedback" was set but never used
         int sensorFeedback;
+..\user\main.c(412): warning:  #111-D: statement is unreachable
+        delay_ms(3000); 
+..\user\main.c(363): warning:  #177-D: variable "i" was declared but never referenced
+        int i;
 ..\user\main.c: 3 warnings, 0 errors
 linking...
-Program Size: Code=23966 RO-data=1810 RW-data=288 ZI-data=1632  
+Program Size: Code=23132 RO-data=1700 RW-data=312 ZI-data=1632  
 FromELF: creating hex file...
 "..\obj\micromouse_test.axf" - 0 Error(s), 3 Warning(s).
 </pre>

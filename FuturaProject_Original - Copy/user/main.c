@@ -36,6 +36,7 @@ int rightEncoderOld;
 int leftEncoderCount;
 int rightEncoderCount;
 int encoderCount;
+int oldEncoderCount;
 int distanceLeft;
 //Error Variables
 float posErrorX = 0;
@@ -50,6 +51,12 @@ float posPwmW = 0;
  * Adjustable Variables  *
  * * * * * * * * * * * * */
 
+//IR Thresholds
+int LFValue1 = 390;
+int RFValue1 = 530;
+int LFValue2 = 130;
+int RFValue2 = 192;
+
 //Feedback Control Variables
 bool onlyUseGyroFeedback = false;
 bool onlyUseEncoderFeedback = false;
@@ -61,7 +68,7 @@ bool b_useSpeedProfile = true;
 float pidInputX = 0;
 float pidInputW = 0;
 float kpX = .05, kdX = 0;
-float kpW = 0, kdW = 0;
+float kpW = .05, kdW = 0;
 float kpW1 = 1;
 float kdW1 = 26;
 float kpW2 = 1;
@@ -74,6 +81,10 @@ float accX = 600;
 float decX = 600;
 float accW = 1;
 float decW = 1;
+
+//Distance Variables
+int oneCellDistance = 4500;
+
 //Speed Settings
 /*
 int moveSpeed = speed_to_counts(500*2);
@@ -145,6 +156,7 @@ void speedProfile()
 	getEncoderStatus();
 	updateCurrentSpeed();
 	calculateMotorPwm();
+	//displayMatrix("5");
 }
 
 /* * * * * * * * * * * * * * * * * * * * *
@@ -154,6 +166,7 @@ void speedProfile()
 
 void getEncoderStatus()
 {
+	//displayMatrix("Enc");
 	leftEncoder = getLeftEncCount();
 	rightEncoder = getRightEncCount();
 
@@ -177,16 +190,20 @@ void getEncoderStatus()
 
 void updateCurrentSpeed(void)
 {
+	//displayMatrix("Upd");
 	//printf("Current Speed = %f\r\n", curSpeedX);
+	//displayInt(curSpeedX);
 	if(curSpeedX < targetSpeedX)
 	{
-		curSpeedX += 0.5;//accTrans;
+		//displayMatrix("sped");
+		curSpeedX += accTrans;
 		if(curSpeedX > targetSpeedX)
 			curSpeedX = targetSpeedX;
 	}
 	else if(curSpeedX > targetSpeedX)
 	{
-		curSpeedX -= 0.5;//decTrans;
+		//displayMatrix("slow");
+		curSpeedX -= decTrans;
 		if(curSpeedX < targetSpeedX)
 			curSpeedX = targetSpeedX;
 	}
@@ -211,37 +228,36 @@ void updateCurrentSpeed(void)
  * * * * * * * * * * * * * * * */
 void calculateMotorPwm()
 {
+	
  	int gyroFeedback;
  	int rotationalFeedback;
  	int sensorFeedback;
  	int leftBaseSpeed;
  	int rightBaseSpeed;
-
+	//displayMatrix("1");//displayMatrix("PWM");
  	encoderFeedbackX = rightEncoderChange + leftEncoderChange;
  	encoderFeedbackW = rightEncoderChange - leftEncoderChange;
-
+	//displayInt(encoderFeedbackX);
  	gyroFeedback = aSpeed/gyroFeedbackRatio; 
  	sensorFeedback = sensorError/a_scale; //what is a_scale?
 
  	if (onlyUseGyroFeedback)
  		rotationalFeedback = gyroFeedback;
- 	else if (1)//onlyUseEncoderFeedback)
+ 	else if (onlyUseEncoderFeedback)
  		rotationalFeedback = encoderFeedbackW;
  	else
  		rotationalFeedback = encoderFeedbackW + gyroFeedback;
-	printf("Encoder FeedbackX = %d\r\n", encoderFeedbackX);
+	//printf("Encoder FeedbackX = %d\r\n", encoderFeedbackX);
  	posErrorX += curSpeedX - encoderFeedbackX;
  	posErrorW += curSpeedW - rotationalFeedback;
-
+	//displayMatrix("2");
  	posPwmX = (kpX * posErrorX) + (kdX * (posErrorX - oldPosErrorX));
  	posPwmW = (kpW * posErrorW) + (kdW * (posErrorW - oldPosErrorW));
 	
  	oldPosErrorX = posErrorX;
  	oldPosErrorW = posErrorW;
-	
  	leftBaseSpeed = posPwmX - posPwmW;
  	rightBaseSpeed = posPwmX + posPwmW;
-	//printf("targetX = %d\tLeft Speed = %d\tRight Speed = %d", targetSpeedX, leftBaseSpeed, rightBaseSpeed);
  	setLeftPwm(leftBaseSpeed);
  	setRightPwm(rightBaseSpeed);
 }
@@ -250,11 +266,57 @@ int speed_to_counts(int accel)
 		return accel;
 }
 
+int abs(int num)
+{
+	if (num < 0)
+	{
+		num = -num;
+	}
+	return num;
+}
+
+int needToDecelerate(int32_t dist, int16_t curSpd,  int16_t endSpd)
+{
+	if (curSpd < 0)
+		curSpd = -curSpd;
+	if (endSpd < 0)
+		endSpd  = -endSpd;
+	if (dist < 0)
+		dist = 1;
+	if (dist == 0)
+		dist = 1;
+	return (abs((curSpd*curSpd - endSpd*endSpd)*100/dist/4/2));
+}
+
+void moveOneCell(int moveSpeed, int maxSpeed)
+{
+	targetSpeedX = moveSpeed;
+	targetSpeedW = 0;
+	
+	do
+	{
+		if (needToDecelerate(distanceLeft, curSpeedX, moveSpeed) < decX)
+		{
+			targetSpeedX = maxSpeed;
+		}
+		else
+		{
+			targetSpeedX = moveSpeed;
+		}
+	} while(((encoderCount - oldEncoderCount) < oneCellDistance && LFSensor < LFValue2 && RFSensor < RFValue2) 
+	|| (LFSensor < LFValue1 && LFSensor > LFValue2) 
+	|| (RFSensor < RFValue1 && RFSensor > RFValue2));
+	
+	oldEncoderCount = encoderCount;
+}
+
+
 /* * * * * * * * * * * * * * * * * * * *
  * Basic Movements										 *
  * 1. forwardDistance								   *
  *										                 *
  * * * * * * * * * * * * * * * * * * * */
+
 void forwardDistance(int distance, int left_speed, int right_speed, bool coast) 
 {
 	distanceLeft = distance;
@@ -298,6 +360,7 @@ void button2_interrupt(void)
 
 int main(void) 
 {
+	int i;
 	Systick_Configuration();
 	LED_Configuration();
 	button_Configuration();
@@ -329,11 +392,28 @@ int main(void)
 	//targetSpeedX = 100;
 	//delay_ms(2000);
 	
-	displayMatrix("DSPD");
-	targetSpeedX = 1000;
-	delay_ms(2000);
-	printf("==============================================\n\r=======================================================\r\n");
-	displayMatrix("STOP");
+	//
+	//targetSpeedX = 100;
+	//delay_ms(2000);
+	//printf("==============================================\n\r=======================================================\r\n");
+	
+	while (1)
+	{
+		moveOneCell(20, 30);
+		/*targetSpeedX = 0;
+		targetSpeedW = 0;
+		delay_ms(1000);*/
+	}
+	//delay_ms(1000); 
+	//displayMatrix("Wat");
+	//delay_ms(1000);
+	//displayMatrix("STOP");
+	//displayMatrix("GO");
+	delay_ms(3000); 
+	targetSpeedX = 20;
+	targetSpeedW = 0;
+	delay_ms(5000);
 	targetSpeedX = 0;
-	delay_ms(10000);
+	targetSpeedW = 0;
+	return 0;
 }
