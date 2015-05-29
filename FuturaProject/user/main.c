@@ -12,7 +12,9 @@
 #include "main.h"
 #include "sensor_Function.h"
 #include "adc.h"
-
+/* * * * * * * * * *
+ * Setup Variables *
+ * * * * * * * * * */
 //Current Speed Variables
 float curSpeedX = 0; //Current Translational Speed
 float curSpeedW = 0; //Current Rotational Speed
@@ -42,6 +44,18 @@ float oldPosErrorW = 0;
 //PWM Variables
 int posPwmX = 0;
 int posPwmW = 0;
+
+/* * * * * * * * * * * * *
+ * Adjustable Variables  *
+ * * * * * * * * * * * * */
+
+//Feedback Control Variables
+bool onlyUseGyroFeedback = false;
+bool onlyUseEncoderFeedback = false;
+//Sensor Variables
+bool b_useIR = true;
+bool b_useGyro = true;
+bool b_useSpeedProfile = true;
 //PID Variables
 float pidInputX = 0;
 float pidInputW = 0;
@@ -52,6 +66,9 @@ float kdW1 = 26;
 float kpW2 = 1;
 float kdW2 = 36;
 //Acceleration Variables
+//temp
+float accTrans = 5;
+float decTrans = 5;
 float accX = 600;
 float decX = 600;
 float accW = 1;
@@ -66,17 +83,22 @@ int maxSpeed = speed_to_counts(2000*2);
 */
 //Gyro Variables
 int gyroFeedbackRatio = 5700;
-//Sensor Variables
-bool b_useIR = true;
-bool b_useGyro = true;
-bool b_useSpeedProfile = true;
+//Analog Scale (?)
+int a_scale = 1;
+//IR Sensor Calibration
+int DLMiddleValue;
+int DRMiddleValue;
+int sensorError = 0;
+
 
 /* * * * * * * * * * * * * 
  * Function Declarations *
  * * * * * * * * * * * * */
+void getSensorError(void);
 void speedProfile(void);
 void getEncoderStatus(void);
 void calculateMotorPwm(void);
+int speed_to_counts(int accel);
 
 /* * * * * * * * * *
  * Systick Handler *
@@ -97,6 +119,19 @@ void systick()
 	}
 }
 
+/* * * * * * * * * * * * *
+ * Caculate Sensor Error *
+ * * * * * * * * * * * * */
+void getSensorError(void)//the very basic case
+{
+	if(DLSensor > DLMiddleValue && DRSensor < DRMiddleValue)
+		sensorError = DLMiddleValue - DLSensor;
+	else if(DRSensor > DRMiddleValue && DLSensor < DLMiddleValue)
+		sensorError = DRSensor - DRMiddleValue;
+	else
+		sensorError = 0;
+}
+
 /* * * * * * * * * * * * * * * * * * * *
  *            Speed Profile            *
  *     Calculate what current speed    *
@@ -106,7 +141,7 @@ void speedProfile()
 {
 	getEncoderStatus();
 	//updateCurrentSpeed();
-	//calculateMotorPwm();
+	calculateMotorPwm();
 }
 
 /* * * * * * * * * * * * * * * * * * * * *
@@ -133,52 +168,11 @@ void getEncoderStatus()
 	distanceLeft -= encoderChange;
 }
 
-/* * * * * * * * * * * * * * * *
- *      Calculate Motor PWM    *
- *   Take speed variables and  *
- *  calculate motor pwm values *
- * * * * * * * * * * * * * * * */
- void calculateMotorPwm()
- {
- 	int gyroFeedback;
- 	int rotationalFeeback;
- 	int sensorFeedback;
- 	int leftBaseSpeed;
- 	int rightBaseSpeed;
-
- 	encoderFeedbackX = rightEncoderChange + leftEncoderChange;
- 	encoderFeedbackW = rightEncoderChange - leftEncoderChange;
-
- 	gyroFeedback = aSpeed/gyroFeedbackRatio;
- 	sensorFeedback = sensorError/a_scale;
-
- 	if (onlyUseGyroFeedback)
- 		rotationalFeedback = gyroFeedback;
- 	else if (onlyUseEncoderFeedback)
- 		rotationalFeedback = encoderFeedbackW;
- 	else
- 		rotationalFeedback = encoderFeedbackW + gyroFeedback;
-
- 	posErrorX += curSpeedX - encoderFeedbackX;
- 	posErrorW += curSpeedW - rotationalFeedback;
-
- 	posPwmX = (kpX * posErrorX) + (kdX * (posErrorX - oldPosErrorX));
- 	posPwmW = (kpW * posErrorW) + (kdW * (posErrorW - oldPosErrorW));
-
- 	oldPosErrorX = posErrorX;
- 	oldPosErrorW = posErrorW;
-
- 	leftBaseSpeed = posPwmX - posPwmW;
- 	rightBaseSpeed = posPwmX + posPwmW;
-
- 	setLeftPwm(leftBaseSpeed);
- 	setRightPwm(rightBaseSpeed);
- }
-/********************
-* Basic Movements		*
-*										*
-*										*
-********************/
+/* * * * * * * * * * * * * * * * * * * *
+ * Basic Movements										 *
+ * 1. forwardDistance								   *
+ *										                 *
+ * * * * * * * * * * * * * * * * * * * */
 void forwardDistance(int distance, int left_speed, int right_speed, bool coast) 
 {
 	distanceLeft = distance;
@@ -201,11 +195,15 @@ void forwardDistance(int distance, int left_speed, int right_speed, bool coast)
 	turning = 1;*/
 	while (distanceLeft>=0) 
 	{
+		//targetSpeedX = 100;
+		//targetSpeedW = 0;
 		setLeftPwm(100);
 		setRightPwm(100);
 	}
-	setLeftPwm(0);
-	setRightPwm(0);
+		setLeftPwm(0);
+		setRightPwm(0);
+	//targetSpeedX = 0;
+	//targetSpeedW = 0;
 }
 
 void button1_interrupt(void) 
