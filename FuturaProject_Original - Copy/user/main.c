@@ -399,10 +399,12 @@ int main(void)
 	
 	while (1)
 	{
+		displayMatrix("ONEC");
 		moveOneCell(20, 30);
-		/*targetSpeedX = 0;
+		displayMatrix("STOP");
+		targetSpeedX = 0;
 		targetSpeedW = 0;
-		delay_ms(1000);*/
+		delay_ms(1000);
 	}
 	//delay_ms(1000); 
 	//displayMatrix("Wat");
